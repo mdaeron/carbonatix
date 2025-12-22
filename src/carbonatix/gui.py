@@ -7,69 +7,172 @@ import datetime as dt
 import streamlit as st
 import carbonatix as cx
 
+st.set_page_config(layout = 'wide')
+
 st.markdown('# Carbonatix')
 
-st.markdown('### Input Data')
-uploaded_file = st.file_uploader(
-	label = 'rawdata',
-)
+with st.container(horizontal = True, horizontal_alignment = 'right'):
+	standardize_button = st.button("Standardize")
 
-_anchors_df = pd.DataFrame(
-	[
-		dict(Sample = 'IAEA603', d13C_VPDB = '2.0', d18O_VPDB = '-2.0'),
-		dict(Sample = 'NBS18', d13C_VPDB = '-5.0', d18O_VPDB = '-23.0'),
-		dict(Sample = 'NBS 18', d13C_VPDB = '-5.0', d18O_VPDB = '-23.0'),
-		dict(Sample = 'NBS 19', d13C_VPDB = '2.0', d18O_VPDB = '-2.0'),
-		dict(Sample = '603-1', d13C_VPDB = '2.0', d18O_VPDB = '-2.0'),
-	],
-)
+if standardize_button or 'S' in st.session_state:
+	tab_anchors, tab_rawdata, tab_results = st.tabs(["Settings", "Input Data", "Results"])
+else:
+	tab_anchors, tab_rawdata = st.tabs(["Settings", "Input Data"])
 
-st.markdown('### Anchors')
-anchors_df = st.data_editor(
-	_anchors_df,
-	hide_index = True,
-	num_rows = 'dynamic',
-	column_config = {
-		'd13C_VPDB': st.column_config.NumberColumn('δ13C_VPDB', format = '%+.3f'),
-		'd18O_VPDB': st.column_config.NumberColumn('δ18O_VPDB', format = '%+.3f'),
-	}
-)
-
-if uploaded_file:
-
-	here = pathlib.Path(os.path.abspath(os.path.dirname(__file__)))
+with tab_anchors:
+	_anchors_list = [
+		dict(Sample = 'IAEA-603', d13C_VPDB =  '2.46', d18O_VPDB =  '-2.37', d18O_VSMOW = None),
+		dict(Sample = '603-3',    d13C_VPDB =  '2.46', d18O_VPDB =  '-2.37', d18O_VSMOW = None),
+		dict(Sample = 'NBS-18',   d13C_VPDB = '-5.01', d18O_VPDB = '-23.01', d18O_VSMOW = None),
+		dict(Sample = 'NBS18',    d13C_VPDB = '-5.01', d18O_VPDB = '-23.01', d18O_VSMOW = None),
+	]
 	
-	cx.process(
-		rawdata = uploaded_file,
-		anchors_df = anchors_df,
+	_anchors_df = pd.DataFrame(_anchors_list)
+	
+	st.markdown('### Reference Materials')
+
+	anchors_df = st.data_editor(
+		_anchors_df,
+		hide_index = True,
+		num_rows = 'dynamic',
+		column_config = {
+			'd13C_VPDB': st.column_config.NumberColumn('δ13C_VPDB', format = '%+.3f'),
+			'd18O_VPDB': st.column_config.NumberColumn('δ18O_VPDB', format = '%+.3f'),
+			'd18O_VSMOW': st.column_config.NumberColumn('δ18O_VSMOW', format = '%+.3f'),
+		},
 	)
 
-	buf = io.BytesIO()
+	anchors_df.d13C_VPDB = anchors_df.d13C_VPDB.astype(float)
+	anchors_df.d18O_VPDB = anchors_df.d18O_VPDB.astype(float)
 
-	readme = f"""
+	with st.expander('Help on reference materials'):
+		st.markdown("""
+* Reference Materials (RMs) for isotopic standardization have nominal values in δ<sup>13</sup>C and/or δ<sup>18</sup>O.
+* Carbonate RMs must have nominal values in δ<sup>13</sup>C<sub>VPDB</sub> and/or δ<sup>18</sup>O<sub>VPDB</sub>.
+* CO<sub>2</sub> RMs must have nominal values in δ<sup>13</sup>C<sub>VPDB</sub> and/or δ<sup>18</sup>O<sub>VSMOW</sub>.
+* No RM may have nominal values in both δ<sup>18</sup>O<sub>VPDB</sub> and/or δ<sup>18</sup>O<sub>VSMOW</sub>.
+* The <u>Sample</u> entry must match exactly the <u>Sample</u> entry in your raw data (next tab)
+		""", unsafe_allow_html = True)
+
+	st.markdown('### Oxygen-18 fractionation factor for the acid reaction')
+	st.text_input(label = 'alpha18_acid', value="1.08")
+
+
+with tab_rawdata:
+	st.markdown('### Input Data')
+	uploaded_file = st.file_uploader(label = ' ')
+
+	if uploaded_file:
+
+		if uploaded_file.name.endswith('.xlsx'):
+			rawdata_df = pd.read_excel(
+				uploaded_file,
+				sheet_name = 'Batch Report',
+				header = 3,
+			).dropna(subset = ['Id'])
+			if 'Session' not in rawdata_df:
+				rawdata_df['Session'] = 'nameless_session'
+			rawdata_df['UID'] = rawdata_df['Id']
+			rawdata_df['Sample'] = rawdata_df['Name'].str.split().str[0]
+			rawdata_df['d45'] = rawdata_df['45/44 δ⁴⁵CO₂ (raw)']
+			rawdata_df['d46'] = rawdata_df['46/44 δ⁴⁶CO₂ (raw)']
+			rawdata_df['Time'] = rawdata_df.index + 0.
+			rawdata_df = rawdata_df[['UID', 'Session', 'Time', 'Sample', 'd45', 'd46']].set_index('UID')
+		elif uploaded_file.name.endswith('.xls'):
+			rawdata_df = pd.read_excel(
+				uploaded_file,
+				sheet_name = 'F1CO2-log',
+				header = 1,
+			)
+			if 'Session' not in rawdata_df:
+				rawdata_df['Session'] = 'nameless_session'
+			rawdata_df['UID'] = rawdata_df['RunIndex']
+			rawdata_df['Sample'] = rawdata_df['FileText']
+			rawdata_df['d45'] = rawdata_df['RawDelta1']
+			rawdata_df['d46'] = rawdata_df['RawDelta2']
+			rawdata_df['Time'] = rawdata_df.Index + 0.
+			rawdata_df = rawdata_df[['UID', 'Session', 'Time', 'Sample', 'd45', 'd46']].set_index('UID')
+	
+		elif uploaded_file.name.endswith('.csv'):
+			rawdata_df = pd.read_csv(
+				uploaded_file,
+			)
+			if 'Session' not in rawdata_df:
+				rawdata_df['Session'] = 'nameless_session'
+			rawdata_df = rawdata_df[['UID', 'Session', 'Time', 'Sample', 'd45', 'd46']].set_index('UID')
+		
+		rawdata_df = st.data_editor(
+			rawdata_df,
+			height = 'content',
+			hide_index = True,
+			num_rows = 'dynamic',
+			column_config = {
+				'd45': st.column_config.NumberColumn('d45', format = '%+.3f'),
+				'd46': st.column_config.NumberColumn('d46', format = '%+.3f'),
+			},
+		)
+
+if standardize_button or 'S' in st.session_state:
+	with tab_results:
+		st.markdown('### Results are here!')
+
+		if 'S' in st.session_state:
+			S = st.session_state['S']
+		else:
+			S = cx.process(
+				rawdata = uploaded_file,
+				anchors_df = anchors_df,
+			)
+			st.session_state['S'] = S
+
+		readme = f"""
 This zipfile was generated by carbonatix on {dt.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}.
 
 To reprocess the data, run the following command from the root of this directory:
 
 uv run carbonatix -i 'input/{uploaded_file.name}' -a 'input/anchors.csv'
 """
+	
+		here = pathlib.Path(os.path.abspath(os.path.dirname(__file__)))
+		buf = io.BytesIO()
+		with zipfile.ZipFile(buf, 'x') as dl_zip:
+			dl_zip.writestr('readme.txt', readme[1:])
+			with open(here / 'assets/pyproject.toml') as fid:
+				dl_zip.writestr('pyproject.toml', fid.read())
+			with open(here / 'assets/uv.lock') as fid:
+				dl_zip.writestr('uv.lock', fid.read())
+			uploaded_file.seek(0)
+			dl_zip.writestr(f'input/{uploaded_file.name}', uploaded_file.read())
+			with io.BytesIO() as fid:
+				anchors_df.to_csv(fid, index = False)
+				fid.seek(0)
+				dl_zip.writestr(f'input/anchors.csv', fid.read())
+			dl_zip.writestr(f'output/samples.csv', S['csv_samples'])
+			dl_zip.writestr(f'output/sessions.csv', S['csv_sessions'])
+			dl_zip.writestr(f'output/analyses.csv', S['csv_analyses'])
+	
+		st.download_button(
+			label = 'Download zip',
+			data = buf.getvalue(),
+			file_name = 'carbonatix-results.zip',
+			mime = 'application/zip',
+			)
+		
 
-	with zipfile.ZipFile(buf, 'x') as dl_zip:
-		dl_zip.writestr('readme.txt', readme[1:])
-		with open(here / 'assets/pyproject.toml') as fid:
-			dl_zip.writestr('pyproject.toml', fid.read())
-		with open(here / 'assets/uv.lock') as fid:
-			dl_zip.writestr('uv.lock', fid.read())
-		uploaded_file.seek(0)
-		dl_zip.writestr(f'input/{uploaded_file.name}', uploaded_file.read())
-		with io.BytesIO() as fid:
-			anchors_df.to_csv(fid, index = False)
-			fid.seek(0)
-			dl_zip.writestr(f'input/anchors.csv', fid.read())
-
-	st.download_button(
-		label = 'Download zip',
-		data = buf.getvalue(),
-		file_name = 'carbonatix-results.zip',
-		mime = 'application/zip',
+		st.markdown('#### Samples')
+		st.data_editor(
+			pd.read_csv(io.StringIO(S['csv_samples'])).set_index('Sample'),
+			width = 'content',
+		)
+	
+		st.markdown('#### Sessions')
+		st.data_editor(
+			pd.read_csv(io.StringIO(S['csv_sessions'])).set_index('Session').transpose(),
+			width = 'content',
+		)
+	
+		st.markdown('#### Analyses')
+		st.data_editor(
+			pd.read_csv(io.StringIO(S['csv_analyses'])).set_index('UID'),
+			width = 'content',
 		)

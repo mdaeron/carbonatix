@@ -2,6 +2,7 @@ import os
 import typer
 import subprocess
 import pandas as pd
+from . import co2irms
 
 app = typer.Typer(
 	add_completion = True,
@@ -40,7 +41,7 @@ def process(
 	rawdata,
 	anchors_df,
 ):
-	try:
+	if rawdata.name.endswith('.xlsx'):
 		rawdata_df = pd.read_excel(
 			rawdata,
 			sheet_name = 'Batch Report',
@@ -52,7 +53,7 @@ def process(
 		rawdata_df['d46'] = rawdata_df['46/44 δ⁴⁶CO₂ (raw)']
 		rawdata_df['Time'] = rawdata_df.index + 0.
 		rawdata_df = rawdata_df[['UID', 'Time', 'Sample', 'd45', 'd46']]
-	except ValueError:
+	elif rawdata.name.endswith('.xls'):
 		rawdata_df = pd.read_excel(
 			rawdata,
 			sheet_name = 'F1CO2-log',
@@ -65,4 +66,19 @@ def process(
 		rawdata_df['Time'] = rawdata_df.Index + 0.
 		rawdata_df = rawdata_df[['UID', 'Time', 'Sample', 'd45', 'd46']]
 
-	print(rawdata_df)
+	elif rawdata.name.endswith('.csv'):
+		rawdata_df = pd.read_csv(
+			rawdata,
+		)
+
+	if 'Session' not in rawdata:
+		rawdata_df['Session'] = 'nameless_session'
+	
+	S = co2irms.standardize(
+		data = rawdata_df.to_dict('records'),
+		anchors = anchors_df.set_index('Sample').to_dict('index'),
+		alpha18_acid = 1.008129,
+		constraints = {},
+	)
+	
+	return S
