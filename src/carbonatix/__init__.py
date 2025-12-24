@@ -33,52 +33,42 @@ def cli():
 	Run CLI
 	"""
 	print("Running CLI now.")
-	
+
 def run():
 	app()
 
 def process(
-	rawdata,
-	anchors_df,
+	rawdata_df,
+	settings,
 ):
-	if rawdata.name.endswith('.xlsx'):
-		rawdata_df = pd.read_excel(
-			rawdata,
-			sheet_name = 'Batch Report',
-			header = 3,
-		).dropna(subset = ['Id'])
-		rawdata_df['UID'] = rawdata_df['Id']
-		rawdata_df['Sample'] = rawdata_df['Name'].str.split().str[0]
-		rawdata_df['d45'] = rawdata_df['45/44 δ⁴⁵CO₂ (raw)']
-		rawdata_df['d46'] = rawdata_df['46/44 δ⁴⁶CO₂ (raw)']
-		rawdata_df['Time'] = rawdata_df.index + 0.
-		rawdata_df = rawdata_df[['UID', 'Time', 'Sample', 'd45', 'd46']]
-	elif rawdata.name.endswith('.xls'):
-		rawdata_df = pd.read_excel(
-			rawdata,
-			sheet_name = 'F1CO2-log',
-			header = 1,
-		)
-		rawdata_df['UID'] = rawdata_df['RunIndex']
-		rawdata_df['Sample'] = rawdata_df['FileText']
-		rawdata_df['d45'] = rawdata_df['RawDelta1']
-		rawdata_df['d46'] = rawdata_df['RawDelta2']
-		rawdata_df['Time'] = rawdata_df.Index + 0.
-		rawdata_df = rawdata_df[['UID', 'Time', 'Sample', 'd45', 'd46']]
 
-	elif rawdata.name.endswith('.csv'):
-		rawdata_df = pd.read_csv(
-			rawdata,
-		)
+	data = rawdata_df.to_dict('records')
+	anchors = {}
+	for a in settings['anchors']:
+		anchors[a] = settings['anchors'][a].copy()
+		for k in anchors[a]['aka']:
+			anchors[k] = anchors[a]
+		anchors[a].pop('aka')
+	isoparams = {
+		k: settings[k]
+		for k in [
+			'R13_VPDB',
+			'R18_VSMOW',
+			'R17_VSMOW',
+			'LAMBDA_17',
+			'd18O_VSMOW_of_VPDB',
+			'D17O_VSMOW_of_VPDB',
+			'alpha18_acid',
+		]
+	}
+	constraints = settings['constraints']
 
-	if 'Session' not in rawdata:
-		rawdata_df['Session'] = 'nameless_session'
-	
+	co2irms.config = co2irms.Config(**isoparams)
+
 	S = co2irms.standardize(
-		data = rawdata_df.to_dict('records'),
-		anchors = anchors_df.set_index('Sample').to_dict('index'),
-		alpha18_acid = 1.008129,
-		constraints = {},
+		data = data,
+		anchors = anchors,
+		constraints = constraints,
 	)
-	
+
 	return S

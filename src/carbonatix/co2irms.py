@@ -26,6 +26,7 @@ class Config():
 		LAMBDA_17          = 0.528,      # Barkan & Luz (2005)
 		d18O_VSMOW_of_VPDB = 30.92,      # Coplen et al. (1983), corrected to match d18O_VPDB_of_NBS19 = -2.2 ‰
 		D17O_VSMOW_of_VPDB = 0.,         # arbitrary convention
+		alpha18_acid       = 1.008129,   #
 	):
 		self.R13_VPDB = R13_VPDB
 		self.R18_VSMOW = R18_VSMOW
@@ -33,7 +34,8 @@ class Config():
 		self.LAMBDA_17 = LAMBDA_17
 		self.d18O_VSMOW_of_VPDB = d18O_VSMOW_of_VPDB
 		self.D17O_VSMOW_of_VPDB = D17O_VSMOW_of_VPDB
-	
+		self.alpha18_acid = alpha18_acid
+
 	@property
 	def R18_VPDB(self):
 		return self.R18_VSMOW * (1 + self.d18O_VSMOW_of_VPDB / 1000)
@@ -55,7 +57,7 @@ def ratios_to_deltas(
 	R46,
 	D17O = 0, # in permil
 ):
-	
+
 	R13_VPDB = config.R13_VPDB
 	R18_VSMOW = config.R18_VSMOW
 	R17_VSMOW = config.R17_VSMOW
@@ -69,7 +71,7 @@ def ratios_to_deltas(
 	def f(R18):
 		K = np.exp(D17O/1e3) * R17_VSMOW / R18_VSMOW**LAMBDA_17
 		return (-3 * K**2 * R18**(2*LAMBDA_17) + 2 * K * R45 * R18**LAMBDA_17 + 2 * R18 - R46)
-	
+
 	with warnings.catch_warnings():
 		warnings.simplefilter("ignore")
 		R18 = fsolve(f, R46/R18_VSMOW/2, xtol = 1e-16)
@@ -100,23 +102,25 @@ def deltas_to_ratios(
 	R13 = R13_VPDB * (1 + d13C_VPDB/1e3)
 	R18 = R18_VSMOW * (1 + d18O_VSMOW/1e3)
 	R17 = np.exp(D17O/1e3) * R17_VSMOW * (1 + d18O_VSMOW/1e3)**LAMBDA_17
-	
+
 	R45 = 2 * R17 + R13
 	R46 = 2 * R18 + 2 * R17 * R13 + R17**2
-	
+
 	return(R45, R46)
 
 def standardize(
 	data,
 	anchors,
-	alpha18_acid = 1.008129,
 	constraints = {},
 ):
+	print(f'constraints = {constraints}')
+	alpha18_acid = config.alpha18_acid
+
 	data = pd.DataFrame(data)
 	if 'UID' not in data:
 		data['UID'] = 'A' + (data.index + 1).astype(str)
 	data = data.set_index('UID')
-	
+
 	if 'Session' not in data:
 		data['Session'] = 'nameless_session'
 
@@ -146,14 +150,14 @@ def standardize(
 	for p in fitparams:
 		if p in constraints:
 			fitparams[p].expr = constraints[p]
-	
+
 	def residuals(p, sigma45, sigma46):
 
 		data['d13C_VPDB_of_wg'] = data.Session.map({
 			s: p[f'd13C_VPDB_of_wg_{sanitize(s)}'].value
 			for s in data.Session.unique()
 		})
-	
+
 		data['d18O_VSMOW_of_wg'] = data.Session.map({
 			s: p[f'd18O_VSMOW_of_wg_{sanitize(s)}'].value
 			for s in data.Session.unique()
@@ -168,7 +172,7 @@ def standardize(
 			s: p[f'd46_scaling_{sanitize(s)}'].value
 			for s in data.Session.unique()
 		})
-	
+
 		data['d13C_VPDB_true'] = data.Sample.map({
 			s: p[f'd13C_VPDB_of_{sanitize(s)}'].value
 			for s in data.Sample.unique()
@@ -178,7 +182,7 @@ def standardize(
 			s: p[f'd18O_VSMOW_of_{sanitize(s)}'].value
 			for s in data.Sample.unique()
 		})
-		
+
 		data['R45wg'], data['R46wg'] = deltas_to_ratios(
 			data['d13C_VPDB_of_wg'],
 			data['d18O_VSMOW_of_wg'],
@@ -191,7 +195,7 @@ def standardize(
 
 		data['d45_model'] = data['d45_scaling'] * (data['R45_true'] / data['R45wg'] - 1) * 1000
 		data['d46_model'] = data['d46_scaling'] * (data['R46_true'] / data['R46wg'] - 1) * 1000
-				
+
 		return np.hstack((
 			(data['d45'] - data['d45_model']) / sigma45,
 			(data['d46'] - data['d46_model']) / sigma46,
@@ -221,7 +225,7 @@ def standardize(
 			)
 			sigma45 *= ((fitresult.residual[:N]**2).sum() / Nf13)**.5
 			sigma46 *= ((fitresult.residual[-N:]**2).sum() / Nf18)**.5
-		
+
 	p = {_: fitresult.params[_].value for _ in fitresult.params}
 
 	data['d13C_VPDB_of_wg'] = data.Session.map({
@@ -254,7 +258,7 @@ def standardize(
 		for s in data.Sample.unique()
 	})
 	data['d18O_VPDB_true'] = (1000 + data[f'd18O_VSMOW_true']) / (1 + config.d18O_VSMOW_of_VPDB / 1000) / alpha18_acid - 1000
-	
+
 	data['R45wg'], data['R46wg'] = deltas_to_ratios(
 		data['d13C_VPDB_of_wg'],
 		data['d18O_VSMOW_of_wg'],
@@ -264,7 +268,7 @@ def standardize(
 		data['d13C_VPDB_true'],
 		data['d18O_VSMOW_true'],
 	)
-	
+
 	data['R45'] = (1 + data['d45'] / data['d45_scaling'] / 1000) * data['R45wg']
 	data['R46'] = (1 + data['d46'] / data['d46_scaling'] / 1000) * data['R46wg']
 
@@ -299,7 +303,7 @@ def standardize(
 	out['Nf_d18O'] = Nf18
 	out['t95_d13C'] = tstudent.ppf(1 - 0.05/2, Nf13)
 	out['t95_d18O'] = tstudent.ppf(1 - 0.05/2, Nf18)
-	
+
 	out['sessions'] = {}
 	for s in data.Session.unique():
 		_s = sanitize(s)
@@ -345,15 +349,21 @@ def standardize(
 		out['samples'][s]['d13C_VPDB'] = fitresult.params['d13C_VPDB_of_'+_s].value
 		out['samples'][s]['SD_d13C_VPDB'] = out['samples'][s]['data']['d13C_VPDB'].std()
 		if fitresult.params['d13C_VPDB_of_'+_s].stderr:
+			out['samples'][s]['is_d13C_anchor'] = False
 			out['samples'][s]['SE_d13C_VPDB'] = fitresult.params['d13C_VPDB_of_'+_s].stderr
 			out['samples'][s]['95CL_d13C_VPDB'] = out['samples'][s]['SE_d13C_VPDB'] * out['t95_d13C']
+		else:
+			out['samples'][s]['is_d13C_anchor'] = True
 
 		out['samples'][s]['d18O_VSMOW'] = fitresult.params['d18O_VSMOW_of_'+_s].value
 		out['samples'][s]['SD_d18O_VSMOW'] = out['samples'][s]['data']['d13C_VPDB'].std()
 		if fitresult.params['d18O_VSMOW_of_'+_s].stderr:
+			out['samples'][s]['is_d18O_anchor'] = False
 			out['samples'][s]['SE_d18O_VSMOW'] = fitresult.params['d18O_VSMOW_of_'+_s].stderr
 			out['samples'][s]['95CL_d18O_VSMOW'] = out['samples'][s]['SE_d18O_VSMOW'] * out['t95_d18O']
- 
+		else:
+			out['samples'][s]['is_d18O_anchor'] = True
+
 		out['samples'][s]['d18O_VPDB'] = (1000 + out['samples'][s]['d18O_VSMOW']) / (1 + config.d18O_VSMOW_of_VPDB / 1000) / alpha18_acid - 1000
 		out['samples'][s]['SD_d18O_VPDB'] = out['samples'][s]['data']['d18O_VPDB'].std()
 		if fitresult.params['d18O_VSMOW_of_'+_s].stderr:
@@ -412,5 +422,5 @@ def standardize(
 		'd18O_VSMOW_residual',
 		'd18O_VPDB_residual',
 	]].to_csv(float_format = '%.4f')
-	
+
 	return out
