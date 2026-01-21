@@ -157,63 +157,68 @@ with tab_settings:
 
 with tab_rawdata:
 	st.markdown('### Input Data')
-	uploaded_file = st.file_uploader(label = ' ')
+	uploaded_files = st.file_uploader(label = ' ', accept_multiple_files = True)
 
 	error_placeholder = st.empty()
 
-	if uploaded_file:
+	if uploaded_files:
+		rawdata_df = pd.DataFrame()
 
-		if uploaded_file.name.endswith('.xlsx'):
-			rawdata_df = pd.read_excel(
-				uploaded_file,
-				sheet_name = 'Batch Report',
-				header = 3,
-			).dropna(subset = ['Id'])
-			if 'Session' not in rawdata_df:
-				rawdata_df['Session'] = 'nameless_session'
-			rawdata_df['UID'] = rawdata_df['Id']
-			rawdata_df['Sample'] = rawdata_df['Name'].str.split().str[0]
-			rawdata_df['d45'] = rawdata_df['45/44 δ⁴⁵CO₂ (raw)']
-			rawdata_df['d46'] = rawdata_df['46/44 δ⁴⁶CO₂ (raw)']
-			rawdata_df['Time'] = rawdata_df.index + 0.
-			rawdata_df = rawdata_df[['UID', 'Session', 'Time', 'Sample', 'd45', 'd46']].set_index('UID')
-		elif uploaded_file.name.endswith('.xls'):
-			rawdata_df = pd.read_excel(
-				uploaded_file,
-				sheet_name = 'F1CO2-log',
-				header = 1,
+		for session_autonumber, uploaded_file in enumerate(uploaded_files):
+
+			if uploaded_file.name.endswith('.xlsx'):
+				_rawdata_df = pd.read_excel(
+					uploaded_file,
+					sheet_name = 'Batch Report',
+					header = 3,
+				).dropna(subset = ['Id'])
+				if 'Session' not in _rawdata_df:
+					_rawdata_df['Session'] = f'Session{session_autonumber+1:02.0f}'
+				_rawdata_df['UID'] = _rawdata_df['Id']
+				_rawdata_df['Sample'] = _rawdata_df['Name'].str.split().str[0]
+				_rawdata_df['d45'] = _rawdata_df['45/44 δ⁴⁵CO₂ (raw)']
+				_rawdata_df['d46'] = _rawdata_df['46/44 δ⁴⁶CO₂ (raw)']
+				_rawdata_df['Time'] = _rawdata_df.index + 0.
+				_rawdata_df = _rawdata_df[['UID', 'Session', 'Time', 'Sample', 'd45', 'd46']].set_index('UID')
+			elif uploaded_file.name.endswith('.xls'):
+				_rawdata_df = pd.read_excel(
+					uploaded_file,
+					sheet_name = 'F1CO2-log',
+					header = 1,
+				)
+				if 'Session' not in _rawdata_df:
+					_rawdata_df['Session'] = 'nameless_session'
+				_rawdata_df['UID'] = _rawdata_df['RunIndex']
+				_rawdata_df['Sample'] = _rawdata_df['FileText']
+				_rawdata_df['d45'] = _rawdata_df['RawDelta1']
+				_rawdata_df['d46'] = _rawdata_df['RawDelta2']
+				_rawdata_df['Time'] = _rawdata_df.Index + 0.
+				_rawdata_df = _rawdata_df[['UID', 'Session', 'Time', 'Sample', 'd45', 'd46']].set_index('UID')
+
+			elif uploaded_file.name.endswith('.csv'):
+				_rawdata_df = pd.read_csv(
+					uploaded_file,
+				)
+				if 'Session' not in _rawdata_df:
+					_rawdata_df['Session'] = 'nameless_session'
+				_rawdata_df = _rawdata_df[['UID', 'Session', 'Time', 'Sample', 'd45', 'd46']].set_index('UID')
+
+			_rawdata_df = st.data_editor(
+				_rawdata_df,
+				height = 'content',
+				# hide_index = True,
+				num_rows = 'dynamic',
+				column_config = {
+					'd45': st.column_config.NumberColumn('d45', format = '%+.3f'),
+					'd46': st.column_config.NumberColumn('d46', format = '%+.3f'),
+				},
 			)
-			if 'Session' not in rawdata_df:
-				rawdata_df['Session'] = 'nameless_session'
-			rawdata_df['UID'] = rawdata_df['RunIndex']
-			rawdata_df['Sample'] = rawdata_df['FileText']
-			rawdata_df['d45'] = rawdata_df['RawDelta1']
-			rawdata_df['d46'] = rawdata_df['RawDelta2']
-			rawdata_df['Time'] = rawdata_df.Index + 0.
-			rawdata_df = rawdata_df[['UID', 'Session', 'Time', 'Sample', 'd45', 'd46']].set_index('UID')
 
-		elif uploaded_file.name.endswith('.csv'):
-			rawdata_df = pd.read_csv(
-				uploaded_file,
-			)
-			if 'Session' not in rawdata_df:
-				rawdata_df['Session'] = 'nameless_session'
-			rawdata_df = rawdata_df[['UID', 'Session', 'Time', 'Sample', 'd45', 'd46']].set_index('UID')
-
-		rawdata_df = st.data_editor(
-			rawdata_df,
-			height = 'content',
-			# hide_index = True,
-			num_rows = 'dynamic',
-			column_config = {
-				'd45': st.column_config.NumberColumn('d45', format = '%+.3f'),
-				'd46': st.column_config.NumberColumn('d46', format = '%+.3f'),
-			},
-		)
+			rawdata_df = pd.concat([rawdata_df, _rawdata_df], ignore_index = True)
 
 with tab_constraints:
 
-	if uploaded_file:
+	if uploaded_files:
 
 		st.markdown('### Additional Constraints')
 		constraints = {}
@@ -244,7 +249,7 @@ with tab_constraints:
 
 if standardize_button:
 
-	if uploaded_file:
+	if uploaded_files:
 		S = cx.process(
 			rawdata_df = rawdata_df,
 			settings = settings,
@@ -255,6 +260,7 @@ if standardize_button:
 
 if 'S' in st.session_state:
 	S = st.session_state['S']
+
 	with tab_results:
 		st.markdown('### Results')
 
@@ -263,18 +269,21 @@ if 'S' in st.session_state:
 		st.data_editor(
 			pd.read_csv(io.StringIO(S['csv_samples'])).set_index('Sample'),
 			width = 'content',
+			height = 'content',
 		)
 
 		st.markdown('#### Sessions')
 		st.data_editor(
 			pd.read_csv(io.StringIO(S['csv_sessions'])).set_index('Session').transpose(),
 			width = 'content',
+			height = 'content',
 		)
 
 		st.markdown('#### Analyses')
 		st.data_editor(
 			pd.read_csv(io.StringIO(S['csv_analyses'])).set_index('UID'),
 			width = 'content',
+			height = 'content',
 		)
 
 	with tab_plots:
@@ -285,7 +294,7 @@ This zipfile was generated by carbonatix on {dt.datetime.now().strftime('%Y-%m-%
 
 To reprocess the data, run the following command from the root of this directory:
 
-uv run carbonatix -i 'input/{uploaded_file.name}' -a 'input/anchors.csv'
+uv run carbonatix -i 'input/??? -a 'input/anchors.csv'
 """
 
 		here = pathlib.Path(os.path.abspath(os.path.dirname(__file__)))
@@ -296,8 +305,9 @@ uv run carbonatix -i 'input/{uploaded_file.name}' -a 'input/anchors.csv'
 				dl_zip.writestr('pyproject.toml', fid.read())
 			with open(here / 'assets/uv.lock') as fid:
 				dl_zip.writestr('uv.lock', fid.read())
-			uploaded_file.seek(0)
-			dl_zip.writestr(f'input/{uploaded_file.name}', uploaded_file.read())
+			for uploaded_file in uploaded_files:
+				uploaded_file.seek(0)
+				dl_zip.writestr(f'input/{uploaded_file.name}', uploaded_file.read())
 			with io.BytesIO() as fid:
 				rawdata_df.to_csv(fid, index = False)
 				fid.seek(0)
