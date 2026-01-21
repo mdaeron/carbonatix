@@ -157,7 +157,10 @@ with tab_settings:
 
 with tab_rawdata:
 	st.markdown('### Input Data')
-	uploaded_files = st.file_uploader(label = ' ', accept_multiple_files = True)
+	uploaded_files = sorted(
+		st.file_uploader(label = ' ', accept_multiple_files = True),
+		key = lambda _: _.name,
+	)
 
 	error_placeholder = st.empty()
 
@@ -173,7 +176,7 @@ with tab_rawdata:
 					header = 3,
 				).dropna(subset = ['Id'])
 				if 'Session' not in _rawdata_df:
-					_rawdata_df['Session'] = f'Session{session_autonumber+1:02.0f}'
+					_rawdata_df['Session'] = uploaded_file.name[:-5].split('_')[-1]
 				_rawdata_df['UID'] = _rawdata_df['Id']
 				_rawdata_df['Sample'] = _rawdata_df['Name'].str.split().str[0]
 				_rawdata_df['d45'] = _rawdata_df['45/44 δ⁴⁵CO₂ (raw)']
@@ -290,12 +293,11 @@ if 'S' in st.session_state:
 		st.markdown('### Plots')
 		plots = {}
 
-		out = cx.co2irms.plot_residuals(S, 'd13C_VPDB')
-		st.pyplot(out.fig)
+		out = cx.co2irms.plot_residuals(S, 'd13C_VPDB', title = '$δ^{13}C_{VPDB}$ residuals (‰)')
+		st.pyplot(out.fig, width = 600)
 		plots['residuals_d13C'] = out
-
-		out = cx.co2irms.plot_residuals(S, 'd18O_VPDB')
-		st.pyplot(out.fig)
+		out = cx.co2irms.plot_residuals(S, 'd18O_VPDB', title = '$δ^{18}O_{VPDB}$ residuals (‰)')
+		st.pyplot(out.fig, width = 600)
 		plots['residuals_d18O'] = out
 
 		readme = f"""

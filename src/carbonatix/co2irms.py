@@ -430,20 +430,34 @@ def plot_residuals(
 	sdata,
 	field,
 	fig = None,
-	figsize = (5,3),
+	figsize = (8,3),
 	ax = None,
+	title = None,
 	s = 6,
 	marker = 'x',
 	alpha = 1,
-	linewidths = 1,
+	linewidths = 0.75,
 	color_unknowns = 'k',
 	color_anchors = 'r',
+	color_sessions = (0, 0, 0, .25),
+	grid_kw = dict(alpha = 0.2, lw = 0.5),
+	lw_sessions = 0.5,
 	show_sample_label = True,
 	show_uid_label = True,
 	sample_label_kw = dict(size = 6, alpha = 0.3),
 	uid_label_kw = dict(size = 6, alpha = 0.2, color = 'k'),
 ):
 	from matplotlib import pyplot as ppl
+	from matplotlib.transforms import blended_transform_factory
+
+	ppl.rcParams['font.sans-serif']  = 'Fira Math'
+	ppl.rcParams['mathtext.fontset'] = 'custom'
+	ppl.rcParams['mathtext.rm']      = 'sans'
+	ppl.rcParams['mathtext.bf']      = 'sans:bold'
+	ppl.rcParams['mathtext.it']      = 'sans:italic'
+	ppl.rcParams['mathtext.cal']     = 'sans:italic'
+	ppl.rcParams['mathtext.default'] = 'rm'
+
 	out = SimpleNamespace()
 
 	if fig is None and ax is None:
@@ -462,11 +476,38 @@ def plot_residuals(
 		else:
 			raise ValueError("Both `fig` and `ax` were specified, but `fig` is not the parent figure of `ax`.")
 
+	if title:
+		out.ax.set_title(title)
+	out.ax.set_xticks([])
+	out.ax.grid(**grid_kw)
+
 	N = len(sdata['data'])
 	Ns = len(sdata['sessions'])
 	session_offsets = {s: k for k,s in enumerate(sdata['sessions'])}
-	X = sdata['data']['Session'].map(session_offsets) + range(N) + 1
-	Y = sdata['data'][f'{field}_residual']
+	Ss = sdata['data']['Session']
+	X = np.array(Ss.map(session_offsets) + range(N) + 1)
+	Y = np.array(sdata['data'][f'{field}_residual'])
+
+	_trans = blended_transform_factory(out.ax.transData, out.ax.transAxes)
+	_kw = dict(
+		va = 'center',
+		ha = 'center',
+		color = color_sessions,
+		transform = _trans,
+	)
+	xleft = 0
+	for x1, x2, ss in zip(X[:-1], X[1:], Ss[:-1]):
+		if (x2 - x1) != 1:
+			xright = (x2 + x1)/2
+			out.ax.axvline(
+				xright,
+				lw = lw_sessions,
+				color = color_sessions,
+			)
+			out.ax.text((xleft + xright)/2, 0, '\n' + ss, **_kw)
+			xleft = xright
+	out.ax.text((xleft + x2 + 1)/2, 0, '\n' + ss, **_kw)
+
 	anchorfield = f'{field.split('_')[0]}_anchor'
 	colors = sdata['data'][anchorfield].map(
 		{
@@ -487,6 +528,5 @@ def plot_residuals(
 				x, y, '\n' + u,
 				**(dict(color = c, va = 'center', ha = 'center') | uid_label_kw),
 			)
-
 
 	return out
