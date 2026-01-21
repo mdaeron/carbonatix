@@ -13,6 +13,7 @@ import lmfit
 import warnings
 import numpy as np
 import pandas as pd
+from types import SimpleNamespace
 from scipy.optimize import fsolve
 from scipy.stats import t as tstudent
 
@@ -422,5 +423,70 @@ def standardize(
 		'd18O_VSMOW_residual',
 		'd18O_VPDB_residual',
 	]].to_csv(float_format = '%.4f')
+
+	return out
+
+def plot_residuals(
+	sdata,
+	field,
+	fig = None,
+	figsize = (5,3),
+	ax = None,
+	s = 6,
+	marker = 'x',
+	alpha = 1,
+	linewidths = 1,
+	color_unknowns = 'k',
+	color_anchors = 'r',
+	show_sample_label = True,
+	show_uid_label = True,
+	sample_label_kw = dict(size = 6, alpha = 0.3),
+	uid_label_kw = dict(size = 6, alpha = 0.2, color = 'k'),
+):
+	from matplotlib import pyplot as ppl
+	out = SimpleNamespace()
+
+	if fig is None and ax is None:
+		out.fig = ppl.figure(figsize = figsize)
+		out.ax = out.fig.add_subplot(111)
+	elif ax is None:
+		out.fig = fig
+		out.ax = out.fig.add_subplot(111)
+	elif fig is None:
+		out.fig = ax.get_figure()
+		out.ax = ax
+	else:
+		if fig == ax.get_figure():
+			out.fig = fig
+			out.ax = ax
+		else:
+			raise ValueError("Both `fig` and `ax` were specified, but `fig` is not the parent figure of `ax`.")
+
+	N = len(sdata['data'])
+	Ns = len(sdata['sessions'])
+	session_offsets = {s: k for k,s in enumerate(sdata['sessions'])}
+	X = sdata['data']['Session'].map(session_offsets) + range(N) + 1
+	Y = sdata['data'][f'{field}_residual']
+	anchorfield = f'{field.split('_')[0]}_anchor'
+	colors = sdata['data'][anchorfield].map(
+		{
+			True: color_anchors,
+			False: color_unknowns,
+		}
+	)
+	out.ax.scatter(X, Y, s = s, c = colors, marker = marker, alpha = alpha, linewidths = linewidths)
+	if show_sample_label:
+		for x,y,s,c in zip(X, Y, sdata['data']['Sample'], colors):
+			out.ax.text(
+				x, y, s + '\n',
+				**(dict(color = c, va = 'center', ha = 'center') | sample_label_kw),
+			)
+	if show_uid_label:
+		for x,y,u,c in zip(X, Y, sdata['data'].index, colors):
+			out.ax.text(
+				x, y, '\n' + u,
+				**(dict(color = c, va = 'center', ha = 'center') | uid_label_kw),
+			)
+
 
 	return out
