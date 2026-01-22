@@ -1,7 +1,7 @@
 [project]
 name = "carbonatix"
 version = "0.1.0"
-description = "GUI and CLI for reproducible processing of carbonate δ13C and δ18O analyses by IRMS"
+description = "GUI for reproducible processing of carbonate δ13C and δ18O analyses by IRMS"
 readme = "readme.md"
 authors = [
     { name = "mdaeron", email = "mathieu@daeron.fr" }
