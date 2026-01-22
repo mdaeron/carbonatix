@@ -530,3 +530,103 @@ def plot_residuals(
 			)
 
 	return out
+
+def plot_correction(
+	sdata,
+	xfield,
+	yfield,
+	fig = None,
+	figsize = (5,5),
+	ax = None,
+	title = None,
+	scatter_kw = dict(s = 6, marker = 'x', alpha = 1, linewidths = 0.75),
+	color_unknowns = 'k',
+	color_anchors = 'r',
+	# color_sessions = (0, 0, 0, .25),
+	grid_kw = dict(alpha = 0.2, lw = 0.5),
+	# lw_sessions = 0.5,
+	# show_sample_label = True,
+	# show_uid_label = True,
+	# sample_label_kw = dict(size = 6, alpha = 0.3),
+	# uid_label_kw = dict(size = 6, alpha = 0.2, color = 'k'),
+):
+	from matplotlib import pyplot as ppl
+	from matplotlib.transforms import blended_transform_factory
+
+	ppl.rcParams['font.sans-serif']  = 'Fira Math'
+	ppl.rcParams['mathtext.fontset'] = 'custom'
+	ppl.rcParams['mathtext.rm']      = 'sans'
+	ppl.rcParams['mathtext.bf']      = 'sans:bold'
+	ppl.rcParams['mathtext.it']      = 'sans:italic'
+	ppl.rcParams['mathtext.cal']     = 'sans:italic'
+	ppl.rcParams['mathtext.default'] = 'rm'
+
+	out = SimpleNamespace()
+
+	if fig is None and ax is None:
+		out.fig = ppl.figure(figsize = figsize)
+		out.ax = out.fig.add_subplot(111)
+	elif ax is None:
+		out.fig = fig
+		out.ax = out.fig.add_subplot(111)
+	elif fig is None:
+		out.fig = ax.get_figure()
+		out.ax = ax
+	else:
+		if fig == ax.get_figure():
+			out.fig = fig
+			out.ax = ax
+		else:
+			raise ValueError("Both `fig` and `ax` were specified, but `fig` is not the parent figure of `ax`.")
+
+	if title:
+		out.ax.set_title(title)
+
+	out.ax.grid(**grid_kw)
+
+	N = len(sdata['data'])
+	X = np.array(sdata['data'][xfield])
+	Y = np.array(sdata['data'][yfield])
+
+	# _trans = blended_transform_factory(out.ax.transData, out.ax.transAxes)
+	# _kw = dict(
+	# 	va = 'center',
+	# 	ha = 'center',
+	# 	color = color_sessions,
+	# )
+	# xleft = 0
+	# for x1, x2, ss in zip(X[:-1], X[1:], Ss[:-1]):
+	# 	if (x2 - x1) != 1:
+	# 		xright = (x2 + x1)/2
+	# 		out.ax.axvline(
+	# 			xright,
+	# 			lw = lw_sessions,
+	# 			color = color_sessions,
+	# 		)
+	# 		out.ax.text((xleft + xright)/2, 0, '\n' + ss, **_kw)
+	# 		xleft = xright
+	# out.ax.text((xleft + x2 + 1)/2, 0, '\n' + ss, **_kw)
+
+	anchorfield = f'{yfield.split('_')[0]}_anchor'
+	colors = sdata['data'][anchorfield].map(
+		{
+			True: color_anchors,
+			False: color_unknowns,
+		}
+	)
+	out.ax.scatter(X, Y, c = colors, **scatter_kw)
+
+	# if show_sample_label:
+	# 	for x,y,s,c in zip(X, Y, sdata['data']['Sample'], colors):
+	# 		out.ax.text(
+	# 			x, y, s + '\n',
+	# 			**(dict(color = c, va = 'center', ha = 'center') | sample_label_kw),
+	# 		)
+	# if show_uid_label:
+	# 	for x,y,u,c in zip(X, Y, sdata['data'].index, colors):
+	# 		out.ax.text(
+	# 			x, y, '\n' + u,
+	# 			**(dict(color = c, va = 'center', ha = 'center') | uid_label_kw),
+	# 		)
+
+	return out

@@ -4,6 +4,11 @@ import subprocess
 import pandas as pd
 from . import co2irms
 
+from .__version__ import __version__ as __version__
+
+__author__ = 'Mathieu Daëron'
+__contact__ = 'mathieu@daeron.fr'
+
 app = typer.Typer(
 	add_completion = True,
 	context_settings={'help_option_names': ['-h', '--help']},
@@ -11,28 +16,12 @@ app = typer.Typer(
 	)
 
 @app.callback(invoke_without_command = True)
-def callback(ctx: typer.Context):
+def main():
 	"""
-	GUI and CLI for reproducible processing of carbonate IRMS data
-	"""
-	if ctx.invoked_subcommand is None:
-		typer.echo(ctx.get_help())
-		raise typer.Exit()
-
-@app.command(name = "gui")
-def gui():
-	"""
-	Launch GUI
+	GUI for reproducible processing of carbonate IRMS data
 	"""
 	here = os.path.abspath(os.path.dirname(__file__))
 	subprocess.run(['streamlit', 'run',  f'{here}/gui.py'])
-
-@app.command(name = "process")
-def cli():
-	"""
-	Run CLI
-	"""
-	print("Running CLI now.")
 
 def run():
 	app()
@@ -46,9 +35,10 @@ def process(
 	anchors = {}
 	for a in settings['anchors']:
 		anchors[a] = settings['anchors'][a].copy()
-		for k in anchors[a]['aka']:
-			anchors[k] = anchors[a]
-		anchors[a].pop('aka')
+		if 'aka' in anchors[a] and anchors[a]['aka']:
+			for k in anchors[a]['aka']:
+				anchors[k] = anchors[a]
+			anchors[a].pop('aka')
 	isoparams = {
 		k: settings[k]
 		for k in [

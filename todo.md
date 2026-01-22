@@ -1,4 +1,6 @@
 # To do
 
-- implement custom isotopic parameters
-- add tab to set constraints
+- meilleurs plots de scaling
+- deerive temporelle
+- corriger readme
+- chargement des fichiers par ligne de commande
