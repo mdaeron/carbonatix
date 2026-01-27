@@ -212,6 +212,7 @@ with tab_rawdata:
 				# hide_index = True,
 				num_rows = 'dynamic',
 				column_config = {
+					'Sample': st.column_config.TextColumn('Sample'),
 					'd45': st.column_config.NumberColumn('d45', format = '%+.3f'),
 					'd46': st.column_config.NumberColumn('d46', format = '%+.3f'),
 				},
