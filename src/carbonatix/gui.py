@@ -42,6 +42,11 @@ default_settings = dict(
 	D17O_VSMOW_of_VPDB = 0.0,         # arbitrary convention
 	alpha18_acid       = 1.008129,    # Kim et al. (2007) for calcite at 90 °C
 
+	operator = {
+		'name': '',
+		'email': '',
+	},
+
 	anchors = {
 		'IAEA603': dict(
 			d13C_VPDB = 2.46,
@@ -57,7 +62,7 @@ default_settings = dict(
 )
 
 try:
-	with open('carbonatix-defaults.toml') as fid:
+	with open(pathlib.Path.home() / 'carbonatix-defaults.toml') as fid:
 		settings = tomlkit.load(fid).unwrap()
 except FileNotFoundError:
 	settings = default_settings
