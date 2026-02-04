@@ -1,6 +1,6 @@
 [project]
 name = "carbonatix"
-version = "0.1.2-dev"
+version = "0.1.2"
 description = "GUI for reproducible processing of carbonate δ13C and δ18O analyses by IRMS"
 readme = "readme.md"
 authors = [
